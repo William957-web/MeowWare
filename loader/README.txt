@@ -22,3 +22,8 @@ How to change arch
 ```
 Do you know how to put a whale into a fridge?  
 Yep, my hint is that chocolate stuffs are requirement!  
+
+## Reminders
+1. put the dll file and cache.dat in the same folder!!!
+2. use FULLLLLLLLL path of the dll in the loader!!!
+3. meow
