@@ -23,7 +23,7 @@ class CommandManager:
             if self.recv_sigint:
                 self.recv_sigint = False
                 self.reset_terminal()
-                return ""
+                return HackmdData(request="", response="", status=STATUS_READY, save_path="")
 
             note = self.api.get_note(self.note_id)
             note_content = HackmdData.unpack(note['content'])
