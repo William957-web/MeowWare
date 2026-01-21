@@ -41,8 +41,12 @@ class CommandManager:
             request=command, response="", status=STATUS_EXECUTING, save_path=""))
 
     def receive_response(self) -> str:
-        note_content = self.wait(STATUS_READY)
-        return b64decode(note_content.response).decode('utf-8')
+        note_content = self.wait(STATUS_READY, check_interval=2) 
+        raw_data = b64decode(note_content.response)
+        try:
+            return raw_data.decode('utf-8')
+        except UnicodeDecodeError:
+            return raw_data.decode('cp950', errors='replace')
 
     def execute_command(self, command: str) -> str:
         self.send_command(command)

