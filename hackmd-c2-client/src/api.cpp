@@ -41,7 +41,8 @@ std::string API::send_request(const std::string& method,
         if (post_data) {
             json_str = post_data->dump();
             curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_str.c_str());
-            curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long)json_str.length());
+            curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE,
+                             (long)json_str.length());
         }
 
         curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, method.c_str());
@@ -83,7 +84,18 @@ json API::get_note(const std::string& note_id) {
     }
     std::string url = "https://api.hackmd.io/v1/notes/" + note_id;
     std::string response = send_request("GET", url);
-    return json::parse(response);
+    json result;
+    try {
+        result = json::parse(response);
+    } catch (const std::exception& e) {
+        result = {{"status", "ready"},
+                  {"request", ""},
+                  {"response", ""},
+                  {"save_path", ""}};
+        std::cerr << e.what() << '\n';
+    }
+
+    return result;
 }
 
 json API::create_note(const std::string& title,

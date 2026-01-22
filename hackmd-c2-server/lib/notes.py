@@ -54,16 +54,6 @@ class NoteManager:
         self.targets[target_name] = new_target
         self.save_targets()
 
-        new_target: Target = {
-            "name": target_name,
-            "note_id": self.create_note(
-                title=f"{target_name} command", content=INIT_CONTENT),
-            "real_time_note_id": self.create_note(
-                title=f"{target_name} keylogger", content=INIT_REAL_TIME_CONTENT)
-        }
-
-        self.targets[target_name] = new_target
-        self.save_targets()
 
     def create_note(self, title: str, content: str):
         note = self.api.create_note(
